@@ -1,7 +1,10 @@
+import os
 import socket
 import numpy as np
 import cv2
 import random
+
+from lab1.util import bytes_to_int
 
 
 def sp_noise(image, prob):
@@ -23,46 +26,52 @@ def sp_noise(image, prob):
     return output
 
 
-proxy = socket.socket()
 host = socket.gethostname()
 port_client = 12345
 port_server = 12346
-proxy.bind((host, port_client))
-file = open('proxy_noise_cat.png', 'wb')
-proxy.listen()
 
-client_socket, client_addr = proxy.accept()
-print('Got connection from', client_addr)
-print("Receiving...")
-data = client_socket.recv(2048)
-while (data):
-    file.write(data)
+while True:
+    proxy = socket.socket()
+    proxy.bind((host, port_client))
+    proxy.listen()
+    client_socket, client_addr = proxy.accept()
+    size_from_client = bytes_to_int(client_socket.recv(2048))
+    file = open('proxy_noise_cat.png', 'wb')
+    print('Got connection from', client_addr)
+    print("Receiving...")
+
     data = client_socket.recv(2048)
+    while (data):
+        file.write(data)
+        data = client_socket.recv(2048)
 
-print("Done Receiving")
+    file.close()
 
-file.close()
-client_socket.close()
-proxy.close()
+    print("Done Receiving")
+    client_socket.close()
+    proxy.close()
 
-print("Add noise salt and pepper")
-image = cv2.imread("proxy_noise_cat.png")
-noise_img = sp_noise(image, 0.005)
-cv2.imwrite("proxy_noise_cat.png", noise_img)
-print("Done add noise")
+    size_proxy = os.path.getsize('proxy_noise_cat.png')
 
-proxy = socket.socket()
-proxy.connect((host, port_server))
-file = open('proxy_noise_cat.png', 'rb')
+    if size_from_client == size_proxy:
+        print("Data from client is valid")
+        print("Add noise salt and pepper")
+        image = cv2.imread("proxy_noise_cat.png")
+        noise_img = sp_noise(image, 0.005)
+        cv2.imwrite("proxy_noise_cat.png", noise_img)
+        print("Done add noise")
 
-print('Sending...')
-data = file.read(2048)
+        proxy = socket.socket()
+        proxy.connect((host, port_server))
+        file = open('proxy_noise_cat.png', 'rb')
 
-while (data):
-    proxy.send(data)
-    data = file.read(2048)
+        print('Sending...')
+        data = file.read(2048)
 
-print("Done Sending")
-file.close()
-proxy.close()
-print("Close server proxy")
+        while (data):
+            proxy.send(data)
+            data = file.read(2048)
+
+        print("Done Sending")
+        file.close()
+        proxy.close()
